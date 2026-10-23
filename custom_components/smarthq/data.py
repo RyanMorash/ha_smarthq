@@ -1,25 +1,27 @@
-"""Custom types for smarthq."""
+"""Runtime types for the SmartHQ integration."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
+
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.loader import Integration
+    from pysmarthq import EventStream, SmartHQApi
 
-    from .api import SmartHqApiClient
-    from .coordinator import SmartHqDataUpdateCoordinator
+    from .auth import SmartHQHomeAssistantAuth
+    from .coordinator import SmartHQDataUpdateCoordinator
 
 
-type SmartHqConfigEntry = ConfigEntry[SmartHqData]
+type SmartHQConfigEntry = ConfigEntry[SmartHQData]
 
 
 @dataclass
-class SmartHqData:
-    """Data for the SmartHQ integration."""
+class SmartHQData:
+    """Objects shared by the platforms of one SmartHQ account."""
 
-    client: SmartHqApiClient
-    coordinator: SmartHqDataUpdateCoordinator
-    integration: Integration
+    api: SmartHQApi
+    auth: SmartHQHomeAssistantAuth
+    coordinator: SmartHQDataUpdateCoordinator
+    stream: EventStream
