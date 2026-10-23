@@ -1,0 +1,12 @@
+{
+  "domain": "smarthq",
+  "name": "SmartHQ",
+  "codeowners": [
+    "@RyanMorash"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/RyanMorash/ha_smarthq",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/RyanMorash/ha_smarthq/issues",
+  "version": "0.1.0"
+}
