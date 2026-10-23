@@ -10,7 +10,6 @@ from homeassistant.const import UnitOfTemperature, UnitOfTime
 from .const import (
     BREW_NUMBER_FIELDS,
     COMMAND_BREW_SET,
-    COMMAND_COOKING_MODE_SET,
     COMMAND_COOKING_MODE_START,
     COMMAND_DOUBLE_SET,
     COMMAND_INTEGER_SET,
@@ -24,6 +23,7 @@ from .service_map import double_kind, integer_kind, temperature_kind
 from .util import (
     as_mapping,
     cooking_command_fields,
+    cooking_update_command,
     device_services,
     first_number,
     has_command,
@@ -457,11 +457,9 @@ class SmartHQCookingNumber(SmartHQEntity, NumberEntity):
         service = self._active()
         if service is None:
             return
-        command = (
-            COMMAND_COOKING_MODE_SET
-            if has_command(service, COMMAND_COOKING_MODE_SET)
-            else COMMAND_COOKING_MODE_START
-        )
+        command = cooking_update_command(service)
+        if command is None:
+            return
         fields = {}
         if command == COMMAND_COOKING_MODE_START:
             fields = cooking_command_fields(

@@ -8,8 +8,6 @@ from homeassistant.components.select import SelectEntity
 
 from .const import (
     COMMAND_BREW_SET,
-    COMMAND_COOKING_MODE_SET,
-    COMMAND_COOKING_MODE_START,
     COMMAND_DISHWASHER_SET,
     COMMAND_LAUNDRY_SET,
     COMMAND_MODE_SET,
@@ -27,6 +25,7 @@ from .util import (
     as_mapping,
     choice_options,
     cooking_command_fields,
+    cooking_update_command,
     device_services,
     has_command,
     humanize,
@@ -305,11 +304,9 @@ class SmartHQCookModeSelect(SmartHQEntity, SelectEntity):
         service = next((item for item in self._modes if item.domainType == raw), None)
         if service is None:
             return
-        command = (
-            COMMAND_COOKING_MODE_START
-            if has_command(service, COMMAND_COOKING_MODE_START)
-            else COMMAND_COOKING_MODE_SET
-        )
+        command = cooking_update_command(service)
+        if command is None:
+            return
         fields = cooking_command_fields(
             service, self.hass.config.units.temperature_unit
         )

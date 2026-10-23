@@ -94,23 +94,12 @@ class SmartHQWaterHeater(SmartHQServiceEntity, WaterHeaterEntity):
         mode = as_mapping(service.state).get("mode")
         if not isinstance(mode, str) or mode.endswith(".unknown"):
             return None
-        return _mode_labels().get(mode, humanize(mode))
+        return _label_for(option_map(self._mode_values()), mode)
 
     @property
     def operation_list(self) -> list[str]:
         """Return the water heater modes."""
-        service = self.service
-        config = as_mapping(service.config) if service is not None else {}
-        configured = config.get("supportedModes")
-        if isinstance(configured, list) and all(
-            isinstance(item, str) for item in configured
-        ):
-            return list(
-                option_map(
-                    [item for item in configured if not item.endswith(".unknown")]
-                )
-            )
-        return list(option_map(list(WATER_HEATER_MODES)))
+        return list(option_map(self._mode_values()))
 
     @property
     def target_temperature(self) -> float | None:
@@ -173,12 +162,23 @@ class SmartHQWaterHeater(SmartHQServiceEntity, WaterHeaterEntity):
         service = self.service
         if service is None:
             return
-        raw = _raw_modes().get(operation_mode)
+        raw = option_map(self._mode_values()).get(operation_mode)
         if raw is None:
             return
         await self.coordinator.async_send_command(
             service, COMMAND_WATER_HEATER_SET, mode=raw
         )
+
+    def _mode_values(self) -> list[str]:
+        """Return the raw modes this water heater can be set to."""
+        service = self.service
+        config = as_mapping(service.config) if service is not None else {}
+        configured = config.get("supportedModes")
+        if isinstance(configured, list) and all(
+            isinstance(item, str) for item in configured
+        ):
+            return [item for item in configured if not item.endswith(".unknown")]
+        return list(WATER_HEATER_MODES)
 
     def _setpoint(self) -> tuple[float | None, str]:
         """Return the configured setpoint."""
@@ -200,12 +200,9 @@ class SmartHQWaterHeater(SmartHQServiceEntity, WaterHeaterEntity):
         return low, high
 
 
-def _mode_labels() -> dict[str, str]:
-    """Map raw water heater modes to labels."""
-    labels = option_map(list(WATER_HEATER_MODES))
-    return {raw: label for label, raw in labels.items()}
-
-
-def _raw_modes() -> dict[str, str]:
-    """Map water heater labels back to raw modes."""
-    return option_map(list(WATER_HEATER_MODES))
+def _label_for(mapping: dict[str, str], raw: str) -> str:
+    """Return the label for a raw mode, including modes outside the mapping."""
+    for label, value in mapping.items():
+        if value == raw:
+            return label
+    return humanize(raw)

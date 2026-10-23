@@ -9,6 +9,8 @@ from homeassistant.const import UnitOfTemperature
 from .const import (
     BINARY_MODE_OFF,
     BINARY_MODE_ON,
+    COMMAND_COOKING_MODE_SET,
+    COMMAND_COOKING_MODE_START,
     COMPONENT_LABELS,
     PARAMETER_SUPPORTED,
 )
@@ -220,6 +222,15 @@ def find_service(device: Device | None, service_id: str) -> Service | None:
     for service in device_services(device):
         if service.serviceId == service_id:
             return service
+    return None
+
+
+def cooking_update_command(service: Service) -> str | None:
+    """Return the command that changes a cooking mode without starting it."""
+    if has_command(service, COMMAND_COOKING_MODE_SET):
+        return COMMAND_COOKING_MODE_SET
+    if has_command(service, COMMAND_COOKING_MODE_START):
+        return COMMAND_COOKING_MODE_START
     return None
 
 
