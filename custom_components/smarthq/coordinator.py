@@ -7,6 +7,7 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.core import callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pysmarthq.errors import SmartHQAuthError, SmartHQError
@@ -75,6 +76,14 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
         self._log_unknown(details)
         return details
 
+    @callback
+    def _async_refresh_finished(self) -> None:
+        """Keep reconciliation scheduled when no entity is listening yet."""
+        if self._shutdown_requested:
+            return
+        if self._unsub_refresh is None:
+            self._schedule_refresh()
+
     async def _async_device_details(
         self, listed: list[Device]
     ) -> tuple[dict[str, Device], set[str]]:
@@ -120,7 +129,9 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
     def _reload_if_devices_added(self, details: dict[str, Device]) -> None:
         """Reload so platforms create entities for appliances that appeared."""
         previous = self.data
-        if not previous:
+        # None means this is the first refresh, before platforms set up. An
+        # empty dict is a finished setup that discovered no appliances.
+        if previous is None:
             return
         added = set(details) - set(previous)
         if not added:
@@ -263,7 +274,12 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
         ``async_set_updated_data`` cancels the scheduled refresh and starts the
         interval over. Events can arrive continuously, which would keep the
         30-minute reconcile from running while the socket stays busy.
+
+        A failed reconcile clears ``last_update_success``. The stream is still
+        applying live state, so entities become available again without waiting
+        for the next successful device fetch.
         """
+        self.last_update_success = True
         self.async_update_listeners()
 
     def _handle_device_event(

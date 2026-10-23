@@ -132,3 +132,75 @@ async def test_later_detail_failure_keeps_the_cached_device(
     assert float(hass.states.get(entity_id).state) == 21
     assert len(FakeStream.instances) == streams
     assert DEVICE_ID in entry.runtime_data.coordinator.data
+
+
+async def test_appliances_found_after_an_empty_setup_are_added(
+    hass: HomeAssistant,
+) -> None:
+    """A reconcile after an empty setup creates entities for the new appliances."""
+    FakeApi.reset([])
+    FakeStream.reset()
+    register_implementation(hass)
+    entry = mock_config_entry()
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.smarthq.SmartHQApi", FakeApi),
+        patch("custom_components.smarthq.EventStream", FakeStream),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert _entity_id(hass, f"{DEVICE_ID}_temp-1_temperature") is None
+        assert entry.runtime_data.coordinator.data == {}
+        assert entry.runtime_data.coordinator._unsub_refresh is not None
+
+        device = _device(DEVICE_ID, "Oven")
+        FakeApi.devices = [device]
+        FakeApi.details = {DEVICE_ID: device}
+        await entry.runtime_data.coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert _entity_id(hass, f"{DEVICE_ID}_temp-1_temperature") is not None
+
+
+async def test_stream_event_restores_availability_after_failed_reconcile(
+    hass: HomeAssistant,
+) -> None:
+    """A push makes entities available again without restarting reconciliation."""
+    FakeApi.reset([_device(DEVICE_ID, "Oven")])
+    FakeStream.reset()
+    register_implementation(hass)
+    entry = mock_config_entry()
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.smarthq.SmartHQApi", FakeApi),
+        patch("custom_components.smarthq.EventStream", FakeStream),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = entry.runtime_data.coordinator
+        FakeApi.error = SmartHQError("down")
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        entity_id = _entity_id(hass, f"{DEVICE_ID}_temp-1_temperature")
+        assert entity_id is not None
+        assert hass.states.get(entity_id).state == "unavailable"
+        assert coordinator.last_update_success is False
+        scheduled = coordinator._unsub_refresh
+        assert scheduled is not None
+
+        await FakeStream.instances[-1].queue.put(
+            ServiceEvent(
+                {
+                    "deviceId": DEVICE_ID,
+                    "kind": "pubsub#service",
+                    "serviceId": "temp-1",
+                    "serviceType": TEMPERATURE,
+                    "state": {"celsius": 82, "fahrenheit": 180},
+                }
+            )
+        )
+        await hass.async_block_till_done()
+
+    assert coordinator.last_update_success is True
+    assert coordinator._unsub_refresh is scheduled
+    assert float(hass.states.get(entity_id).state) == 82
