@@ -61,6 +61,7 @@ class FakeApi:
 
     devices: ClassVar[list[dict[str, Any]]] = []
     details: ClassVar[dict[str, dict[str, Any]]] = {}
+    detail_errors: ClassVar[dict[str, Exception]] = {}
     calls = 0
     error: Exception | None = None
 
@@ -73,6 +74,7 @@ class FakeApi:
         """Replace the fixtures served by the next client."""
         cls.devices = devices
         cls.details = {device["deviceId"]: device for device in devices}
+        cls.detail_errors = {}
         cls.calls = 0
         cls.error = None
 
@@ -89,6 +91,9 @@ class FakeApi:
         """Return one device detail payload."""
         self._raise()
         FakeApi.calls += 1
+        error = FakeApi.detail_errors.get(device_id)
+        if error is not None:
+            raise error
         return Device(self.details[device_id], self.auth)
 
     def _raise(self) -> None:

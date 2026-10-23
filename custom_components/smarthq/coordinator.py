@@ -62,15 +62,22 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
         """Load every device, including the services omitted from the list."""
         try:
             listed = await self.api.async_get_all_devices()
-            details = await self._async_device_details(listed)
+            details, failed_ids = await self._async_device_details(listed)
         except SmartHQAuthError as err:
             raise ConfigEntryAuthFailed(err) from err
         except SmartHQError as err:
             raise UpdateFailed(str(err)) from err
+        self._keep_cached_devices(details, failed_ids)
+        if not details and failed_ids:
+            message = "SmartHQ device details failed"
+            raise UpdateFailed(message)
+        self._reload_if_devices_added(details)
         self._log_unknown(details)
         return details
 
-    async def _async_device_details(self, listed: list[Device]) -> dict[str, Device]:
+    async def _async_device_details(
+        self, listed: list[Device]
+    ) -> tuple[dict[str, Device], set[str]]:
         """Fetch device details a few at a time."""
         semaphore = asyncio.Semaphore(DEVICE_DETAIL_CONCURRENCY)
         device_ids = [
@@ -87,20 +94,39 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
             *(_load(device_id) for device_id in device_ids), return_exceptions=True
         )
         devices: dict[str, Device] = {}
-        failures = 0
-        for result in results:
+        failed_ids: set[str] = set()
+        for device_id, result in zip(device_ids, results, strict=True):
             if isinstance(result, SmartHQAuthError):
                 raise result
             if isinstance(result, Exception):
-                failures += 1
+                failed_ids.add(device_id)
                 LOGGER.debug("SmartHQ device detail failed: %s", result)
                 continue
             if isinstance(result.deviceId, str):
                 devices[result.deviceId] = result
-        if not devices and failures:
-            message = "SmartHQ device details failed"
-            raise SmartHQError(message)
-        return devices
+        return devices, failed_ids
+
+    def _keep_cached_devices(
+        self, details: dict[str, Device], failed_ids: set[str]
+    ) -> None:
+        """Keep the last good detail when a later fetch fails."""
+        previous = self.data or {}
+        for device_id in failed_ids:
+            cached = previous.get(device_id)
+            if cached is None:
+                continue
+            details[device_id] = cached
+
+    def _reload_if_devices_added(self, details: dict[str, Device]) -> None:
+        """Reload so platforms create entities for appliances that appeared."""
+        previous = self.data
+        if not previous:
+            return
+        added = set(details) - set(previous)
+        if not added:
+            return
+        LOGGER.debug("Reloading SmartHQ for new devices: %s", ", ".join(sorted(added)))
+        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
     def _log_unknown(self, devices: dict[str, Device]) -> None:
         """Log service types this integration does not turn into entities."""
@@ -228,7 +254,17 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
         if device is None:
             return
         device.apply_event(event)
-        self.async_set_updated_data(self.data)
+        self._publish_stream_update()
+
+    def _publish_stream_update(self) -> None:
+        """
+        Notify entities without postponing reconciliation.
+
+        ``async_set_updated_data`` cancels the scheduled refresh and starts the
+        interval over. Events can arrive continuously, which would keep the
+        30-minute reconcile from running while the socket stays busy.
+        """
+        self.async_update_listeners()
 
     def _handle_device_event(
         self, event: Any, device_id: str | None, raw: dict[str, Any]
@@ -244,4 +280,4 @@ class SmartHQDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Device]]):
         if device is None:
             return
         device.apply_event(event)
-        self.async_set_updated_data(self.data)
+        self._publish_stream_update()
