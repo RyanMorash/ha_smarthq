@@ -1,52 +1,65 @@
-# SmartHQ
+# SmartHQ for Home Assistant
 
-Custom Home Assistant integration for SmartHQ.
+Custom integration for GE Appliances, Café, Profile, and other SmartHQ appliances. It uses the SmartHQ v2 Digital Twin API through [`pysmarthq`](https://github.com/RyanMorash/pysmarthq) and creates entities from each appliance's services. Device type strings are not used to decide which entities exist.
 
-## Installation
+This integration uses the domain `smarthq`. It cannot be installed beside the [official GE Appliances integration](https://github.com/geappliances/geappliances-smarthq-integration), which uses the same domain.
+
+## Install
 
 ### HACS
 
-1. In HACS, open the three-dot menu and choose **Custom repositories**.
-2. Add `https://github.com/RyanMorash/ha_smarthq` as an integration.
-3. Search for **SmartHQ** and download it.
-4. Restart Home Assistant.
+1. In HACS, choose **Custom repositories** and add `https://github.com/RyanMorash/ha_smarthq` as an integration.
+2. Install **SmartHQ** and restart Home Assistant.
 
 ### Manual
 
-Copy `custom_components/smarthq` into the `custom_components` directory of your Home Assistant configuration and restart Home Assistant.
+Copy `custom_components/smarthq` into `<config>/custom_components/smarthq` and restart Home Assistant.
 
-## Configuration
+## Application credentials
 
-Open **Settings → Devices & services → Add integration** and select **SmartHQ**. The config flow asks for a username and password.
+SmartHQ uses OAuth with an application you create. Home Assistant stores the client ID and secret as application credentials. The login does not use PKCE, and the authorize request asks for offline access so a refresh token is issued.
 
-## What?
+1. Open the [SmartHQ Developer Portal](https://developer.smarthq.com/) and create an application.
+2. Set the OAuth callback URL to `https://my.home-assistant.io/redirect/oauth`.
+3. In Home Assistant, open **Settings → Devices & services → Application credentials** and add a credential for SmartHQ using that client ID and secret.
+4. Add the SmartHQ integration and sign in. One config entry is created per SmartHQ user id. Signing in with an account that is already configured aborts the flow.
 
-This repository contains multiple files. Here is an overview:
+If the stored refresh token is rejected, Home Assistant starts a reauthentication flow for that entry.
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/dependabot.yml` | Dependency update configuration for Dependabot. | [Documentation](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/smarthq/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | Overview of the integration, plus installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements_dev.txt` | Python packages used for development/testing this integration (also installs lint tooling via `requirements_lint.txt`). | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
-`requirements_lint.txt` | Python packages used to lint this integration (installed by the Lint CI job). | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
-`requirements_common.txt` | Python packages common to CI and local dev, installed first so any pip upgrade completes before other dependencies (e.g. a modern pip). | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+## What it creates
+
+Each appliance is one device. Entities come from the services on that device:
+
+| Service | Entity |
+| --- | --- |
+| Read-only temperature, integer, double, meter, environmental sensor, string, cycle timer, stopwatch | Sensor |
+| Firmware version | Diagnostic sensor |
+| Presence, door, filter attention | Binary sensor |
+| Toggle, or a mode whose only values are a binary pair | Switch |
+| Other writable modes, including one cook-mode select per cooking cavity | Select |
+| Writable temperature, integer, double, and supported cooking parameters | Number |
+| Trigger, firmware upgrade, and start, stop, pause, or resume commands | Button |
+| `thermostat.v1` | Climate |
+| `waterheater.v1` | Water heater |
+
+A coffee brewer with listed choices and commands becomes a select and a brew button. Without those, it is a status sensor.
+
+Alerts are published on the Home Assistant event bus as `smarthq_alert`. The integration does not create persistent notifications.
+
+Updates arrive on the SmartHQ WebSocket. A reconciliation runs every 30 minutes in case a push was missed.
+
+## v2 API limits
+
+The v2 API does not expose every feature of every appliance. Oven cooking controls, and some Fisher & Paykel or Haier models, may only publish the common services (temperature, mode, toggle, and similar). Services this integration does not recognize are ignored.
+
+Settings-notification switches, demand response, time-of-use, favorites, history metrics, and batch commands are not implemented.
 
 ## Development
 
-This integration is based on the [integration blueprint](https://github.com/ludeeus/integration_blueprint).
+```bash
+python3 -m pip install -r requirements_dev.txt
+scripts/lint
+python3 -m pytest
+```
 
-Open the repository in a Visual Studio Code devcontainer, then run `scripts/develop` to start Home Assistant with this integration loaded. Debug logging for `custom_components.smarthq` is set in [`config/configuration.yaml`](./config/configuration.yaml).
-
-## Next steps
-
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon).
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+`scripts/develop` starts a Home Assistant instance with the included `config/configuration.yaml`.

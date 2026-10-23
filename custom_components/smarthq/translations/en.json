@@ -1,21 +1,22 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "If you need help with the configuration have a look here: {documentation_url}",
-                "data": {
-                    "username": "Username",
-                    "password": "Password"
-                }
-            }
-        },
-        "error": {
-            "auth": "Username/Password is wrong.",
-            "connection": "Unable to connect to the server.",
-            "unknown": "Unknown error occurred."
-        },
-        "abort": {
-            "already_configured": "This entry is already configured."
-        }
+  "application_credentials": {
+    "description": "Create an application in the SmartHQ Developer Portal. Set the OAuth callback URL to {oauth_callback_url}, then enter the client ID and client secret here. [Learn more]({more_info_url})."
+  },
+  "config": {
+    "step": {
+      "reauth_confirm": {
+        "title": "Reauthenticate with SmartHQ",
+        "description": "The SmartHQ login for this account expired. Sign in again to reconnect it."
+      }
+    },
+    "abort": {
+      "already_configured": "This SmartHQ account is already configured.",
+      "cannot_connect": "Unable to connect to SmartHQ.",
+      "oauth_error": "SmartHQ returned an invalid token.",
+      "oauth_unauthorized": "SmartHQ rejected the login.",
+      "reauth_successful": "Reauthentication was successful.",
+      "unknown": "SmartHQ did not return an account id.",
+      "wrong_account": "The signed-in SmartHQ account is not the one being reauthenticated."
     }
+  }
 }
