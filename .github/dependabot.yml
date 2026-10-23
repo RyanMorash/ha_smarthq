@@ -5,7 +5,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      timezone: "Europe/Berlin"
     cooldown:
       default-days: 3
 
@@ -13,7 +12,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      timezone: "Europe/Berlin"
     cooldown:
       default-days: 3
 
@@ -21,7 +19,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      timezone: "Europe/Berlin"
     cooldown:
       default-days: 3
     ignore:
