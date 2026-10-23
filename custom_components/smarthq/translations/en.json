@@ -1,6 +1,6 @@
 {
   "application_credentials": {
-    "description": "Create an application in the SmartHQ Developer Portal. Set the OAuth callback URL to https://my.home-assistant.io/redirect/oauth, then enter the client ID and client secret here. [Learn more]({more_info_url})."
+    "description": "Create an application in the SmartHQ Developer Portal. Set the OAuth callback URL to {oauth_callback_url}, then enter the client ID and client secret here. [Learn more]({more_info_url})."
   },
   "config": {
     "step": {
