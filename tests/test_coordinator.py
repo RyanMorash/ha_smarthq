@@ -162,6 +162,46 @@ async def test_appliances_found_after_an_empty_setup_are_added(
     assert _entity_id(hass, f"{DEVICE_ID}_temp-1_temperature") is not None
 
 
+async def _fire_scheduled_refresh(coordinator) -> None:
+    """Run the scheduled reconcile path after its timer has fired."""
+    coordinator._unsub_refresh.__self__.cancel()
+    coordinator._unsub_refresh = None
+    await coordinator._handle_refresh_interval()
+
+
+async def test_scheduled_reconcile_fetches_with_no_listeners(
+    hass: HomeAssistant,
+) -> None:
+    """The interval refresh fetches and reschedules when no entity is listening."""
+    FakeApi.reset([])
+    FakeStream.reset()
+    register_implementation(hass)
+    entry = mock_config_entry()
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.smarthq.SmartHQApi", FakeApi),
+        patch("custom_components.smarthq.EventStream", FakeStream),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = entry.runtime_data.coordinator
+        assert coordinator._listeners == {}
+        calls = FakeApi.calls
+
+        await _fire_scheduled_refresh(coordinator)
+        await hass.async_block_till_done()
+        assert FakeApi.calls > calls
+        assert coordinator._listeners == {}
+        assert coordinator._unsub_refresh is not None
+
+        device = _device(DEVICE_ID, "Oven")
+        FakeApi.devices = [device]
+        FakeApi.details = {DEVICE_ID: device}
+        await _fire_scheduled_refresh(coordinator)
+        await hass.async_block_till_done()
+        assert _entity_id(hass, f"{DEVICE_ID}_temp-1_temperature") is not None
+
+
 async def test_stream_event_restores_availability_after_failed_reconcile(
     hass: HomeAssistant,
 ) -> None:
